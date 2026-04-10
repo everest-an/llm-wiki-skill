@@ -5,6 +5,7 @@ import fs from "node:fs";
 import { parseArgs } from "./config.js";
 import { handleTree } from "./routes/tree.js";
 import { handlePage, handleRaw } from "./routes/pages.js";
+import { findDefaultPagePath } from "./routes/pages.js";
 import { handleAuditList, handleAuditCreate, handleAuditResolve } from "./routes/audit.js";
 import { handleGraph } from "./routes/graph.js";
 
@@ -22,7 +23,11 @@ app.get("/api/audit", handleAuditList(cfg));
 app.post("/api/audit", handleAuditCreate(cfg));
 app.patch("/api/audit/:id/resolve", handleAuditResolve(cfg));
 app.get("/api/config", (_req, res) => {
-  res.json({ author: cfg.author, wikiRoot: path.basename(cfg.wikiRoot) });
+  res.json({
+    author: cfg.author,
+    wikiRoot: path.basename(cfg.wikiRoot),
+    defaultPage: findDefaultPagePath(cfg.wikiRoot),
+  });
 });
 
 // ── Static client ──────────────────────────────────────────────────────────

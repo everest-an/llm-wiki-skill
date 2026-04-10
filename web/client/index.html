@@ -97,6 +97,30 @@
           <div class="legend-row"><span class="legend-dot entities"></span> entities</div>
           <div class="legend-row"><span class="legend-dot summaries"></span> summaries</div>
           <div class="legend-row"><span class="legend-dot other"></span> other</div>
+          <div class="legend-sep"></div>
+          <div class="legend-row"><span class="legend-line doc-wikilink"></span> doc: wikilink [[...]]</div>
+          <div class="legend-row"><span class="legend-line doc-markdown-link"></span> doc: markdown [text](...)</div>
+          <div class="legend-row"><span class="legend-line code-import"></span> code: import/require</div>
+          <div class="legend-sep"></div>
+          <div class="legend-title">Filters</div>
+          <label class="filter-row"><input id="filter-edge-doc-wikilink" type="checkbox" checked /> doc wikilink</label>
+          <label class="filter-row"><input id="filter-edge-doc-md" type="checkbox" checked /> doc markdown</label>
+          <label class="filter-row"><input id="filter-edge-code-import" type="checkbox" checked /> code import</label>
+          <label class="filter-row filter-select">
+            node kind
+            <select id="filter-node-kind">
+              <option value="all">all</option>
+              <option value="doc">doc only</option>
+              <option value="code">code only</option>
+            </select>
+          </label>
+          <label class="filter-row filter-select">
+            top directory
+            <select id="filter-top-dir">
+              <option value="all">all</option>
+            </select>
+          </label>
+          <div id="graph-filter-status" class="filter-status">showing all</div>
         </div>
       </div>
     </div>

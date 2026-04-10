@@ -15,6 +15,7 @@ export interface GraphNode extends d3force.SimulationNodeDatum {
 export interface GraphEdge extends d3force.SimulationLinkDatum<GraphNode> {
   source: string | GraphNode;
   target: string | GraphNode;
+  kind?: "doc_wikilink" | "doc_markdown_link" | "code_import";
 }
 
 export interface GraphData {
@@ -155,7 +156,7 @@ export function renderGraph(
     .data(links)
     .enter()
     .append("path")
-    .attr("class", "link")
+    .attr("class", (d) => `link kind-${sanitizeEdgeKind(d.kind)}`)
     .attr("fill", "none")
     .attr("stroke-linecap", "round");
 
@@ -273,4 +274,11 @@ export function renderGraph(
 function sanitizeGroup(g: string): string {
   if (g === "concepts" || g === "entities" || g === "summaries") return g;
   return "other";
+}
+
+function sanitizeEdgeKind(kind: GraphEdge["kind"]): string {
+  if (kind === "doc_wikilink" || kind === "doc_markdown_link" || kind === "code_import") {
+    return kind;
+  }
+  return "unknown";
 }

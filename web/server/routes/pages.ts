@@ -4,12 +4,23 @@ import type { Request, Response } from "express";
 import type { ServerConfig } from "../config.js";
 import { createRenderer } from "../render/markdown.js";
 
+const FALLBACK_SKIP_DIRS = new Set([
+  ".git",
+  ".venv",
+  "node_modules",
+  "dist",
+  "build",
+  "coverage",
+  ".pytest_cache",
+  "__pycache__",
+]);
+
 export function handlePage(cfg: ServerConfig) {
   const renderer = createRenderer({ wikiRoot: cfg.wikiRoot });
 
   return (req: Request, res: Response) => {
     const relRaw = (req.query.path as string | undefined) ?? "";
-    const rel = safeRel(relRaw);
+    const rel = safeRel(relRaw, cfg.wikiRoot);
     if (!rel) {
       res.status(400).json({ error: "missing or invalid `path` query" });
       return;
@@ -50,7 +61,7 @@ export function handlePage(cfg: ServerConfig) {
 export function handleRaw(cfg: ServerConfig) {
   return (req: Request, res: Response) => {
     const relRaw = (req.query.path as string | undefined) ?? "";
-    const rel = safeRel(relRaw);
+    const rel = safeRel(relRaw, cfg.wikiRoot);
     if (!rel) {
       res.status(400).send("bad path");
       return;
@@ -64,11 +75,46 @@ export function handleRaw(cfg: ServerConfig) {
   };
 }
 
-function safeRel(input: string): string | null {
-  if (!input) return "wiki/index.md";
+function safeRel(input: string, wikiRoot: string): string | null {
+  if (!input) return findDefaultPagePath(wikiRoot);
   // Reject absolute and ..
   if (path.isAbsolute(input)) return null;
   const normalized = path.posix.normalize(input);
   if (normalized.startsWith("..")) return null;
   return normalized;
+}
+
+export function findDefaultPagePath(wikiRoot: string): string | null {
+  const wikiIndex = path.join(wikiRoot, "wiki", "index.md");
+  if (fs.existsSync(wikiIndex) && fs.statSync(wikiIndex).isFile()) return "wiki/index.md";
+
+  const readme = path.join(wikiRoot, "README.md");
+  if (fs.existsSync(readme) && fs.statSync(readme).isFile()) return "README.md";
+
+  return findFirstMarkdown(wikiRoot, "");
+}
+
+function findFirstMarkdown(dir: string, rel: string): string | null {
+  const entries = fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((e) => {
+      if (e.name.startsWith(".")) return false;
+      if (e.isDirectory() && FALLBACK_SKIP_DIRS.has(e.name)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  for (const e of entries) {
+    const childRel = rel ? path.posix.join(rel, e.name) : e.name;
+    if (e.isFile() && e.name.endsWith(".md")) return childRel;
+    if (e.isDirectory()) {
+      const found = findFirstMarkdown(path.join(dir, e.name), childRel);
+      if (found) return found;
+    }
+  }
+
+  return null;
 }

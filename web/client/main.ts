@@ -13,8 +13,23 @@ interface PageResponse {
   frontmatter: Record<string, unknown> | null;
 }
 
+interface ConfigResponse {
+  author?: string;
+  wikiRoot?: string;
+  defaultPage?: string | null;
+}
+
+type EdgeKind = "doc_wikilink" | "doc_markdown_link" | "code_import";
+
+interface GraphFilters {
+  edgeKinds: Set<EdgeKind>;
+  nodeKind: "all" | "doc" | "code";
+  topDir: string;
+}
+
 const state = {
-  currentPath: "wiki/index.md" as string,
+  currentPath: "" as string,
+  defaultPage: "wiki/index.md" as string,
   rawMarkdown: "" as string,
   author: "me" as string,
   graphTeardown: null as (() => void) | null,
@@ -73,8 +88,9 @@ mermaid.initialize({
 
 async function main() {
   try {
-    const cfg = await fetch("/api/config").then((r) => r.json());
+    const cfg = (await fetch("/api/config").then((r) => r.json())) as ConfigResponse;
     if (cfg.author) state.author = cfg.author;
+    if (cfg.defaultPage) state.defaultPage = cfg.defaultPage;
   } catch {}
 
   // Tree.
@@ -85,11 +101,11 @@ async function main() {
   });
 
   // Initial page.
-  const initial = new URL(window.location.href).searchParams.get("page") ?? "wiki/index.md";
+  const initial = new URL(window.location.href).searchParams.get("page") ?? state.defaultPage;
   await loadPage(initial);
 
   window.addEventListener("popstate", (e) => {
-    const p = (e.state && e.state.page) || new URL(window.location.href).searchParams.get("page") || "wiki/index.md";
+    const p = (e.state && e.state.page) || new URL(window.location.href).searchParams.get("page") || state.defaultPage;
     void loadPage(p);
   });
 
@@ -120,6 +136,9 @@ async function main() {
     await new Promise((r) => requestAnimationFrame(() => r(null)));
 
     const data = (await fetch("/api/graph").then((r) => r.json())) as GraphData;
+    populateTopDirOptions(data);
+    const filtered = filterGraphData(data, readGraphFilters());
+    renderGraphStatus(data, filtered);
     const svg = document.getElementById("graph-svg") as unknown as SVGSVGElement;
     const canvas = document.getElementById("graph-particles") as HTMLCanvasElement;
 
@@ -128,7 +147,7 @@ async function main() {
     const particles = new ParticleField(canvas, 95);
     particles.start();
 
-    const teardownGraph = renderGraph(svg, data, {
+    const teardownGraph = renderGraph(svg, filtered, {
       onNodeClick: (node: GraphNode) => {
         closeGraph();
         void loadPage(node.path);
@@ -154,6 +173,11 @@ async function main() {
   });
   document.getElementById("graph-close")!.addEventListener("click", closeGraph);
   document.getElementById("graph-reset")!.addEventListener("click", () => {
+    resetGraphFilters();
+    void openGraph();
+  });
+  bindGraphFilterEvents(() => {
+    if (graphOverlay.classList.contains("hidden")) return;
     void openGraph();
   });
   document.addEventListener("keydown", (e) => {
@@ -299,6 +323,145 @@ function escapeHtml(s: string): string {
 
 function cssEscape(s: string): string {
   return s.replace(/["\\]/g, "\\$&");
+}
+
+function bindGraphFilterEvents(onChange: () => void): void {
+  const ids = [
+    "filter-edge-doc-wikilink",
+    "filter-edge-doc-md",
+    "filter-edge-code-import",
+    "filter-node-kind",
+    "filter-top-dir",
+  ];
+  for (const id of ids) {
+    const el = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null;
+    if (!el) continue;
+    el.addEventListener("change", onChange);
+  }
+}
+
+function resetGraphFilters(): void {
+  setChecked("filter-edge-doc-wikilink", true);
+  setChecked("filter-edge-doc-md", true);
+  setChecked("filter-edge-code-import", true);
+  setSelectValue("filter-node-kind", "all");
+  setSelectValue("filter-top-dir", "all");
+}
+
+function setChecked(id: string, checked: boolean): void {
+  const el = document.getElementById(id) as HTMLInputElement | null;
+  if (el) el.checked = checked;
+}
+
+function setSelectValue(id: string, value: string): void {
+  const el = document.getElementById(id) as HTMLSelectElement | null;
+  if (el) el.value = value;
+}
+
+function readGraphFilters(): GraphFilters {
+  const edgeKinds = new Set<EdgeKind>();
+  if (isChecked("filter-edge-doc-wikilink")) edgeKinds.add("doc_wikilink");
+  if (isChecked("filter-edge-doc-md")) edgeKinds.add("doc_markdown_link");
+  if (isChecked("filter-edge-code-import")) edgeKinds.add("code_import");
+
+  return {
+    edgeKinds,
+    nodeKind: (getSelectValue("filter-node-kind") as GraphFilters["nodeKind"]) || "all",
+    topDir: getSelectValue("filter-top-dir") || "all",
+  };
+}
+
+function isChecked(id: string): boolean {
+  const el = document.getElementById(id) as HTMLInputElement | null;
+  return !!el?.checked;
+}
+
+function getSelectValue(id: string): string {
+  const el = document.getElementById(id) as HTMLSelectElement | null;
+  return el?.value ?? "";
+}
+
+function populateTopDirOptions(data: GraphData): void {
+  const select = document.getElementById("filter-top-dir") as HTMLSelectElement | null;
+  if (!select) return;
+
+  const prev = select.value || "all";
+  const dirs = new Set<string>();
+  for (const n of data.nodes) {
+    const dir = getTopDir(n.path);
+    if (dir) dirs.add(dir);
+  }
+
+  const sorted = Array.from(dirs).sort((a, b) => a.localeCompare(b));
+  select.innerHTML = '<option value="all">all</option>';
+  for (const d of sorted) {
+    const opt = document.createElement("option");
+    opt.value = d;
+    opt.textContent = d;
+    select.appendChild(opt);
+  }
+  select.value = sorted.includes(prev) ? prev : "all";
+}
+
+function filterGraphData(data: GraphData, filters: GraphFilters): GraphData {
+  const allowedNodeIds = new Set<string>();
+
+  for (const n of data.nodes) {
+    if (!matchNodeKind(n.path, filters.nodeKind)) continue;
+    if (filters.topDir !== "all" && getTopDir(n.path) !== filters.topDir) continue;
+    allowedNodeIds.add(n.id);
+  }
+
+  const filteredEdges = data.edges.filter((e) => {
+    const s = typeof e.source === "string" ? e.source : e.source.id;
+    const t = typeof e.target === "string" ? e.target : e.target.id;
+    if (!allowedNodeIds.has(s) || !allowedNodeIds.has(t)) return false;
+    if (!e.kind) return true;
+    return filters.edgeKinds.has(e.kind as EdgeKind);
+  });
+
+  const connected = new Set<string>();
+  for (const e of filteredEdges) {
+    const s = typeof e.source === "string" ? e.source : e.source.id;
+    const t = typeof e.target === "string" ? e.target : e.target.id;
+    connected.add(s);
+    connected.add(t);
+  }
+
+  const filteredNodes = data.nodes
+    .filter((n) => allowedNodeIds.has(n.id))
+    .filter((n) => connected.has(n.id))
+    .map((n) => ({ ...n, degree: 0 }));
+
+  const degree = new Map<string, number>();
+  for (const e of filteredEdges) {
+    const s = typeof e.source === "string" ? e.source : e.source.id;
+    const t = typeof e.target === "string" ? e.target : e.target.id;
+    degree.set(s, (degree.get(s) ?? 0) + 1);
+    degree.set(t, (degree.get(t) ?? 0) + 1);
+  }
+  for (const n of filteredNodes) n.degree = degree.get(n.id) ?? 0;
+
+  return { nodes: filteredNodes, edges: filteredEdges.map((e) => ({ ...e })) };
+}
+
+function matchNodeKind(p: string, kind: GraphFilters["nodeKind"]): boolean {
+  if (kind === "all") return true;
+  const isDoc = p.toLowerCase().endsWith(".md");
+  return kind === "doc" ? isDoc : !isDoc;
+}
+
+function getTopDir(p: string): string {
+  const normalized = p.startsWith("wiki/") ? p.slice(5) : p;
+  if (!normalized.includes("/")) return "(root)";
+  const seg = normalized.split("/")[0] ?? "";
+  return seg.trim() || "(root)";
+}
+
+function renderGraphStatus(raw: GraphData, filtered: GraphData): void {
+  const el = document.getElementById("graph-filter-status");
+  if (!el) return;
+  el.textContent = `${filtered.nodes.length}/${raw.nodes.length} nodes · ${filtered.edges.length}/${raw.edges.length} edges`;
 }
 
 void main();

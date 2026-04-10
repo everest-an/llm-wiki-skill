@@ -928,6 +928,18 @@ article h3:hover .header-anchor { opacity: 0.7; }
   fill: none;
   transition: stroke 220ms ease, stroke-width 220ms ease, stroke-opacity 220ms ease;
 }
+#graph-svg .link.kind-doc-wikilink {
+  stroke: rgba(180, 190, 254, 0.5);
+}
+#graph-svg .link.kind-doc-markdown_link,
+#graph-svg .link.kind-doc-markdown-link {
+  stroke: rgba(148, 226, 213, 0.54);
+  stroke-dasharray: 5 4;
+}
+#graph-svg .link.kind-code_import,
+#graph-svg .link.kind-code-import {
+  stroke: rgba(250, 179, 135, 0.5);
+}
 #graph-svg .link.dim { stroke-opacity: 0.05; }
 #graph-svg .link.highlight {
   stroke: var(--ctp-lavender);
@@ -1031,6 +1043,74 @@ article h3:hover .header-anchor { opacity: 0.7; }
 .graph-legend .legend-dot.entities  { background: var(--grp-entities); }
 .graph-legend .legend-dot.summaries { background: var(--grp-summaries); }
 .graph-legend .legend-dot.other     { background: var(--grp-other); }
+
+.graph-legend .legend-sep {
+  height: 1px;
+  margin: 8px 0 6px;
+  background: var(--border-soft);
+}
+
+.graph-legend .legend-line {
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--ctp-overlay1);
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+.graph-legend .legend-line.doc-wikilink {
+  border-top-color: rgba(180, 190, 254, 0.8);
+}
+.graph-legend .legend-line.doc-markdown-link {
+  border-top-color: rgba(148, 226, 213, 0.85);
+  border-top-style: dashed;
+}
+.graph-legend .legend-line.code-import {
+  border-top-color: rgba(250, 179, 135, 0.85);
+}
+
+.graph-legend .legend-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-muted);
+  margin: 2px 0 6px;
+}
+
+.graph-legend .filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--fg);
+}
+
+.graph-legend .filter-row input[type="checkbox"] {
+  accent-color: var(--ctp-lavender);
+}
+
+.graph-legend .filter-row.filter-select {
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.graph-legend .filter-row select {
+  min-width: 110px;
+  border: 1px solid var(--border-med);
+  border-radius: 6px;
+  background: rgba(49, 50, 68, 0.65);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
+.graph-legend .filter-status {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--fg-soft);
+  font-family: var(--font-mono);
+}
 
 .graph-hint {
   position: absolute;
